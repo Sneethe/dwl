@@ -1,0 +1,199 @@
+From 4caafd03377d64692e2936c7f258d58f699f5385 Mon Sep 17 00:00:00 2001
+From: Sneethe <not@email.com>
+Date: Tue, 14 Nov 2023 15:01:22 +1100
+Subject: [PATCH] Fixed gaplessgrid
+
+---
+ config.def.h                        |  2 +
+ dwl.c                               | 46 ++++++++++++++
+ main...vnepogodin:gaplessgrid.patch | 94 +++++++++++++++++++++++++++++
+ 3 files changed, 142 insertions(+)
+ create mode 100644 main...vnepogodin:gaplessgrid.patch
+
+diff --git a/config.def.h b/config.def.h
+index db0babc..55deefb 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -33,6 +33,7 @@ static const Layout layouts[] = {
+ 	{ "[]=",      tile },
+ 	{ "><>",      NULL },    /* no layout function means floating behavior */
+ 	{ "[M]",      monocle },
++	{ "###",      gaplessgrid },
+ };
+ 
+ /* monitors */
+@@ -132,6 +133,7 @@ static const Key keys[] = {
+ 	{ MODKEY,                    XKB_KEY_t,          setlayout,      {.v = &layouts[0]} },
+ 	{ MODKEY,                    XKB_KEY_f,          setlayout,      {.v = &layouts[1]} },
+ 	{ MODKEY,                    XKB_KEY_m,          setlayout,      {.v = &layouts[2]} },
++	{ MODKEY,                    XKB_KEY_g,          setlayout,      {.v = &layouts[3]} },
+ 	{ MODKEY,                    XKB_KEY_space,      setlayout,      {0} },
+ 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_space,      togglefloating, {0} },
+ 	{ MODKEY,                    XKB_KEY_e,         togglefullscreen, {0} },
+diff --git a/dwl.c b/dwl.c
+index a7d41b0..3173689 100644
+--- a/dwl.c
++++ b/dwl.c
+@@ -259,6 +259,7 @@ static void focusclient(Client *c, int lift);
+ static void focusmon(const Arg *arg);
+ static void focusstack(const Arg *arg);
+ static Client *focustop(Monitor *m);
++static void gaplessgrid(Monitor *m);
+ static void fullscreennotify(struct wl_listener *listener, void *data);
+ static void handlesig(int signo);
+ static void incnmaster(const Arg *arg);
+@@ -1348,6 +1349,51 @@ handlesig(int signo)
+ 	}
+ }
+ 
++void
++gaplessgrid(Monitor *m)
++{
++	unsigned int n = 0, i = 0, ch, cw, cn, rn, rows, cols;
++	Client *c;
++
++	wl_list_for_each(c, &clients, link)
++		if (VISIBLEON(c, m) && !c->isfloating)
++			n++;
++	if (n == 0)
++		return;
++
++	/* grid dimensions */
++	for (cols = 0; cols <= (n / 2); cols++)
++		if ((cols * cols) >= n)
++			break;
++
++	if (n == 5) /* set layout against the general calculation: not 1:2:2, but 2:3 */
++		cols = 2;
++	rows = n / cols;
++
++	/* window geometries */
++	cw = cols ? m->w.width / cols : m->w.width;
++	cn = 0; /* current column number */
++	rn = 0; /* current row number */
++	wl_list_for_each(c, &clients, link) {
++		unsigned int cx, cy;
++		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
++			continue;
++
++		if ((i / rows + 1) > (cols - n % cols))
++			rows = n / cols + 1;
++		ch = rows ? m->w.height / rows : m->w.height;
++		cx = m->w.x + cn * cw;
++		cy = m->w.y + rn * ch;
++		resize(c, (struct wlr_box) { cx, cy, cw, ch}, 0);
++		rn++;
++		if (rn >= rows) {
++			rn = 0;
++			cn++;
++		}
++		i++;
++	}
++}
++
+ void
+ incnmaster(const Arg *arg)
+ {
+diff --git a/main...vnepogodin:gaplessgrid.patch b/main...vnepogodin:gaplessgrid.patch
+new file mode 100644
+index 0000000..0b63de4
+--- /dev/null
++++ b/main...vnepogodin:gaplessgrid.patch
+@@ -0,0 +1,94 @@
++From 3df2d12ca4afb963077066f079ae44e97271821c Mon Sep 17 00:00:00 2001
++From: Vladislav Nepogodin <nepogodin.vlad@gmail.com>
++Date: Tue, 27 Jul 2021 22:17:35 +0400
++Subject: [PATCH 1/2] Add gaplessgrid layout
++
++---
++ config.def.h |  2 ++
++ dwl.c        | 45 +++++++++++++++++++++++++++++++++++++++++++++
++ 2 files changed, 47 insertions(+)
++
++diff --git a/config.def.h b/config.def.h
++index 089aa3795..c6cac8aeb 100644
++--- a/config.def.h
+++++ b/config.def.h
++@@ -22,6 +22,7 @@ static const Layout layouts[] = {
++ 	{ "[]=",      tile },
++ 	{ "><>",      NULL },    /* no layout function means floating behavior */
++ 	{ "[M]",      monocle },
+++	{ "###",      gaplessgrid },
++ };
++
++ /* monitors
++@@ -82,6 +83,7 @@ static const Key keys[] = {
++ 	{ MODKEY,                    XKB_KEY_t,          setlayout,      {.v = &layouts[0]} },
++ 	{ MODKEY,                    XKB_KEY_f,          setlayout,      {.v = &layouts[1]} },
++ 	{ MODKEY,                    XKB_KEY_m,          setlayout,      {.v = &layouts[2]} },
+++	{ MODKEY,                    XKB_KEY_g,          setlayout,      {.v = &layouts[3]} },
++ 	{ MODKEY,                    XKB_KEY_space,      setlayout,      {0} },
++ 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_space,      togglefloating, {0} },
++ 	{ MODKEY, 					 XKB_KEY_e,    		togglefullscreen, {0} },
++diff --git a/dwl.c b/dwl.c
++index a2a0b692c..d3a5d651e 100644
++--- a/dwl.c
+++++ b/dwl.c
++@@ -240,6 +240,7 @@ static void focusclient(Client *c, int lift);
++ static void focusmon(const Arg *arg);
++ static void focusstack(const Arg *arg);
++ static Client *focustop(Monitor *m);
+++static void gaplessgrid(Monitor *m);
++ static void fullscreennotify(struct wl_listener *listener, void *data);
++ static void handlesig(int signo);
++ static void incnmaster(const Arg *arg);
++@@ -1166,6 +1166,51 @@ focustop(Monitor *m)
++ 	return NULL;
++ }
++
+++void
+++gaplessgrid(Monitor *m)
+++{
+++	unsigned int n = 0, i = 0, ch, cw, cn, rn, rows, cols;
+++	Client *c;
+++
+++	wl_list_for_each(c, &clients, link)
+++		if (VISIBLEON(c, m) && !c->isfloating)
+++			n++;
+++	if (n == 0)
+++		return;
+++
+++	/* grid dimensions */
+++	for (cols = 0; cols <= (n / 2); cols++)
+++		if ((cols * cols) >= n)
+++			break;
+++
+++	if (n == 5) /* set layout against the general calculation: not 1:2:2, but 2:3 */
+++		cols = 2;
+++	rows = n / cols;
+++
+++	/* window geometries */
+++	cw = cols ? m->w.width / cols : m->w.width;
+++	cn = 0; /* current column number */
+++	rn = 0; /* current row number */
+++	wl_list_for_each(c, &clients, link) {
+++		unsigned int cx, cy;
+++		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
+++			continue;
+++
+++		if ((i / rows + 1) > (cols - n % cols))
+++			rows = n / cols + 1;
+++		ch = rows ? m->w.height / rows : m->w.height;
+++		cx = m->w.x + cn * cw;
+++		cy = m->w.y + rn * ch;
+++		resize(c, (struct wlr_box) { cx, cy, cw, ch}, 0);
+++		rn++;
+++		if (rn >= rows) {
+++			rn = 0;
+++			cn++;
+++		}
+++		i++;
+++	}
+++}
+++
++ void
++ incnmaster(const Arg *arg)
++ {
+-- 
+2.42.0
+
